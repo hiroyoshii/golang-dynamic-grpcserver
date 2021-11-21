@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package helloworld;
+
+option go_package = "google.golang.org/grpc/examples/helloworld/helloworld";
+
+// The greeting service definition.
+service Greeter {
+  // Sends a greeting hello
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+  // Sends a greeting goodbye
+  rpc SayGoodbye (GoodbyeRequest) returns (GoodbyeReply) {}
+}
+
+// The request message containing the user's name.
+message HelloRequest {
+  string name = 1;
+}
+
+// The response message containing the greetings
+message HelloReply {
+  string message = 1;
+}
+
+// The request message containing the user's name.
+message GoodbyeRequest {
+  string name = 1;
+}
+
+// The response message containing the greetings
+message GoodbyeReply {
+  string message = 1;
+}
