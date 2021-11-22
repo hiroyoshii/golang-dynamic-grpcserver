@@ -38,20 +38,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	cli := rpb.NewServerReflectionClient(conn)
-	info, err := cli.ServerReflectionInfo(ctx)
-	err = info.SendMsg(&rpb.ServerReflectionRequest{
-		MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
-			FileByFilename: "hello_world.proto",
-		},
-	})
-	resp := &rpb.ServerReflectionResponse{}
-	err = info.RecvMsg(resp)
+	filedescProto, err := getFileDescFromReflectionAPI(ctx, conn)
 	if err != nil {
 		panic(err)
 	}
 	filepb := &descriptorpb.FileDescriptorProto{}
-	for _, fd := range resp.GetFileDescriptorResponse().FileDescriptorProto {
+	for _, fd := range filedescProto {
 		proto.Unmarshal(fd, filepb)
 		filedesc, _ := protodesc.NewFile(filepb, nil)
 		svcdesc := filedesc.Services().Get(0)
@@ -70,4 +62,25 @@ func main() {
 			}
 		}
 	}
+}
+
+func getFileDescFromReflectionAPI(ctx context.Context, conn *grpc.ClientConn) ([][]byte, error) {
+	info, err := rpb.NewServerReflectionClient(conn).ServerReflectionInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = info.SendMsg(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+			FileByFilename: "unary_sample/helloworld/hello_world.proto",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp := &rpb.ServerReflectionResponse{}
+	err = info.RecvMsg(resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetFileDescriptorResponse().FileDescriptorProto, nil
 }

@@ -22,9 +22,10 @@ import (
 
 var (
 	port         = flag.Int("port", 50051, "The server port")
+	descfilePath = "../helloworld/helloworld_descriptor.pb"
 	epNameMsgMap = map[string]string{
-		"Greeter.SayHello":   "hello %s",
-		"Greeter.SayGoodbye": "good bye %s",
+		"Greeter.SayHello":   "hello %v",
+		"Greeter.SayGoodbye": "good bye %v",
 	}
 )
 
@@ -41,10 +42,10 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		panic(err)
 	}
 	s := grpc.NewServer()
-	bytes, err := ioutil.ReadFile("../helloworld/helloworld_descriptor.pb")
+	bytes, err := ioutil.ReadFile(descfilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +73,7 @@ func main() {
 	reflection.Register(s)
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		panic(err)
 	}
 }
 
@@ -121,17 +122,14 @@ func (s *server) CallAPI(base context.Context, request proto.Message, endpoint s
 	if err != nil {
 		return nil, err
 	}
-	var m map[string]string
+	var m map[string]interface{}
 	err = json.Unmarshal(reqbyte, &m)
 	if err != nil {
 		return nil, err
 	}
-	respmap := map[string]string{"message": fmt.Sprintf(epNameMsgMap[endpoint], m["name"])}
-	respbyte, err := json.Marshal(respmap)
-	if err != nil {
-		return nil, err
-	}
+
 	resp := dynamicpb.NewMessage(mdesc)
+	respbyte := []byte(fmt.Sprintf("{\"message\":\"%s\"}", fmt.Sprintf(epNameMsgMap[endpoint], m["name"])))
 	err = protojson.Unmarshal(respbyte, resp)
 	return resp, err
 }

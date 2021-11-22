@@ -1,4 +1,4 @@
-module gitlab.com/golang-dynamic-grpcserver
+module github.com/golang-dynamic-grpcserver
 
 go 1.17
 

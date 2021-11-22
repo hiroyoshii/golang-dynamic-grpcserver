@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package helloworld;
 
-option go_package = "google.golang.org/grpc/examples/helloworld/helloworld";
+option go_package = "github.com/golang-dynamic-grpcserver/unary_sample/helloworld";
 
 // The greeting service definition.
 service Greeter {
