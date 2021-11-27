@@ -1,1 +1,0 @@
-protoc --include_imports --descriptor_set_out=./helloworld_descriptor.pb hello_world.proto

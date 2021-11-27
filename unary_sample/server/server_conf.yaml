@@ -1,0 +1,3 @@
+rpc2Msg:
+  helloworld.Greeter.SayHello: "hello %v"
+  helloworld.Greeter.SayGoodbye: "good bye %v"

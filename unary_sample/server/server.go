@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -17,26 +16,17 @@ import (
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var (
-	port         = flag.Int("port", 50051, "The server port")
-	descfilePath = "../helloworld/helloworld_descriptor.pb"
-	epNameMsgMap = map[string]string{
-		"Greeter.SayHello":   "hello %v",
-		"Greeter.SayGoodbye": "good bye %v",
-	}
+	port           = flag.Int("port", 50051, "The server port")
+	descfilePath   = "unary_sample/helloworld/helloworld_descriptor.pb"
+	serverConfPath = "unary_sample/server/server_conf.yaml"
+	rpcNameMsgMap  = map[protoreflect.FullName]string{}
 )
-
-// Server is the interface for API Server
-type Server interface {
-	CallAPI(base context.Context, request proto.Message, endpoint string, md protoreflect.MessageDescriptor) (interface{}, error)
-}
-
-// server is used to implement helloworld.GreeterServer.
-type server struct {
-}
 
 func main() {
 	flag.Parse()
@@ -44,37 +34,53 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	s := grpc.NewServer()
-	bytes, err := ioutil.ReadFile(descfilePath)
+	b, err := ioutil.ReadFile(serverConfPath)
 	if err != nil {
 		panic(err)
 	}
-	var fileSet descriptor.FileDescriptorSet
-	if err := proto.Unmarshal(bytes, &fileSet); err != nil {
+	var cnf map[string]map[protoreflect.FullName]string
+	err = yaml.Unmarshal(b, &cnf)
+	if err != nil {
 		panic(err)
 	}
-	// register file descriptor cache for grpcreflection
-	gs := &server{}
-	files := protoregistry.GlobalFiles
-	for _, fd := range fileSet.File {
-		d, err := protodesc.NewFile(fd, files)
-		if err != nil {
-			panic(err)
-		}
-		for i := 0; i < d.Services().Len(); i++ {
-			s.RegisterService(convertToGrpcDesc(d.Services().Get(i)), gs)
-		}
-		if _, err := files.FindFileByPath(d.Path()); err != nil {
-			if err := files.RegisterFile(d); err != nil {
-				panic(err)
-			}
-		}
+	rpcNameMsgMap = cnf["rpc2Msg"]
+
+	s, err := newGrpcServer()
+	if err != nil {
+		panic(err)
 	}
 	reflection.Register(s)
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		panic(err)
 	}
+}
+
+func newGrpcServer() (*grpc.Server, error) {
+	s := grpc.NewServer()
+	bytes, err := ioutil.ReadFile(descfilePath)
+	if err != nil {
+		return nil, err
+	}
+	var fileSet descriptorpb.FileDescriptorSet
+	if err := proto.Unmarshal(bytes, &fileSet); err != nil {
+		return nil, err
+	}
+
+	files := protoregistry.GlobalFiles
+	for _, fd := range fileSet.File {
+		d, err := protodesc.NewFile(fd, files)
+		if err != nil {
+			return nil, err
+		}
+		for i := 0; i < d.Services().Len(); i++ {
+			s.RegisterService(convertToGrpcDesc(d.Services().Get(i)), nil)
+		}
+		if err := files.RegisterFile(d); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 func convertToGrpcDesc(svcd protoreflect.ServiceDescriptor) *grpc.ServiceDesc {
@@ -102,22 +108,21 @@ func unaryHandler(svcd protoreflect.ServiceDescriptor, md protoreflect.MethodDes
 		if err := dec(in); err != nil {
 			return nil, err
 		}
-		epName := fmt.Sprintf("%s.%s", svcd.Name(), md.Name())
 		if interceptor == nil {
-			return srv.(Server).CallAPI(ctx, in, epName, md.Output())
+			return callAPI(ctx, in, md.FullName(), md.Output())
 		}
 		info := &grpc.UnaryServerInfo{
 			Server:     srv,
 			FullMethod: fmt.Sprintf("/%s/%s", svcd.FullName(), md.Name()),
 		}
 		handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.(Server).CallAPI(ctx, req.(proto.Message), epName, md.Output())
+			return callAPI(ctx, req.(proto.Message), md.FullName(), md.Output())
 		}
 		return interceptor(ctx, in, info, handler)
 	}
 }
 
-func (s *server) CallAPI(base context.Context, request proto.Message, endpoint string, mdesc protoreflect.MessageDescriptor) (interface{}, error) {
+func callAPI(base context.Context, request proto.Message, fullName protoreflect.FullName, mdesc protoreflect.MessageDescriptor) (interface{}, error) {
 	reqbyte, err := protojson.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -128,8 +133,12 @@ func (s *server) CallAPI(base context.Context, request proto.Message, endpoint s
 		return nil, err
 	}
 
+	msg, ok := rpcNameMsgMap[fullName]
+	if !ok {
+		return nil, fmt.Errorf("unknown rpc name %s", fullName)
+	}
+	respbyte := []byte(fmt.Sprintf("{\"message\":\"%s\"}", fmt.Sprintf(msg, m["name"])))
 	resp := dynamicpb.NewMessage(mdesc)
-	respbyte := []byte(fmt.Sprintf("{\"message\":\"%s\"}", fmt.Sprintf(epNameMsgMap[endpoint], m["name"])))
 	err = protojson.Unmarshal(respbyte, resp)
 	return resp, err
 }
