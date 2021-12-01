@@ -1,6 +1,7 @@
 # golang-generic-grpcserver
 ## overview
-
+samples for generic gRPC server in golang.
+Without generated golang server/client from protobuf file, implements gRPC server/client.
 ## repository tree
 ```
 .
