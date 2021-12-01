@@ -11,8 +11,7 @@
 ```
 
 ## protobuf file
-Based on https://github.com/grpc/grpc-go/tree/master/examples/helloworld.
-Add SayGoodbye RPC in this repository.
+Based on https://github.com/grpc/grpc-go/tree/master/examples/helloworld, this repository adds SayGoodbye RPC.
 
 ## generate descriptor
 generate protobuf descriptor_set using following command
